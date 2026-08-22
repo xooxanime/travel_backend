@@ -4,6 +4,7 @@ import {
   getTripByIdOrSlug, 
   createTrip, 
   updateTrip, 
+  updateTripSeo,
   deleteTrip, 
   seedTrips 
 } from '../controllers/tripController.js';
@@ -19,6 +20,7 @@ router.get('/:idOrSlug', getTripByIdOrSlug);
 router.post('/seed', protect, adminOnly, seedTrips);
 router.post('/', protect, adminOnly, createTrip);
 router.put('/:id', protect, adminOnly, updateTrip);
+router.put('/:id/seo', protect, adminOnly, updateTripSeo);
 router.delete('/:id', protect, adminOnly, deleteTrip);
 
 export default router;

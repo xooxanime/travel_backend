@@ -3,8 +3,6 @@ import Booking from '../models/Booking.js';
 import Commission from '../models/Commission.js';
 import WalletLedger from '../models/WalletLedger.js';
 
-// @desc Validate coupon server-side
-// @route POST /api/checkout/coupon/validate
 export const validateCouponServerSide = async (req, res) => {
   try {
     const { code, bookingAmount, planId } = req.body;

@@ -80,7 +80,7 @@ export const getProductTripSchema = (trip) => {
     },
     offers: {
       '@type': 'Offer',
-      url: `${SITE_URL}/trip/${trip.id}`,
+      url: `${SITE_URL}/trip/${trip.slug || trip.id}`,
       priceCurrency: 'INR',
       price: trip.price,
       priceValidUntil: '2026-12-31',
@@ -93,11 +93,36 @@ export const getProductTripSchema = (trip) => {
     },
     aggregateRating: {
       '@type': 'AggregateRating',
-      ratingValue: trip.rating || '4.9',
-      reviewCount: trip.reviewsCount || '142',
+      ratingValue: String(trip.rating || '4.9'),
+      reviewCount: String(trip.reviews || trip.reviewsCount || '142'),
       bestRating: '5',
       worstRating: '1'
     }
+  };
+};
+
+export const getTouristTripSchema = (trip) => {
+  if (!trip) return null;
+
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'TouristTrip',
+    name: trip.title,
+    description: trip.overview || `${trip.title} - ${trip.duration} expedition in ${trip.location}.`,
+    image: trip.image,
+    touristType: ['Backpacker', 'Adventure Traveler', 'Group Traveler'],
+    offers: {
+      '@type': 'Offer',
+      price: trip.price,
+      priceCurrency: 'INR',
+      url: `${SITE_URL}/trip/${trip.slug || trip.id}`,
+      availability: 'https://schema.org/InStock'
+    },
+    itinerary: (trip.itinerary || []).map((item, idx) => ({
+      '@type': 'TouristDestination',
+      name: item.title || `Day ${item.day || idx + 1}`,
+      description: item.description || ''
+    }))
   };
 };
 

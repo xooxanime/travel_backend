@@ -4,19 +4,7 @@ import { uploadImageApi, uploadImagesApi, uploadVideoApi, deleteMediaApi } from 
 const ACCEPTED_IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif', 'image/avif'];
 const ACCEPTED_VIDEO_TYPES = ['video/mp4', 'video/webm', 'video/quicktime', 'video/x-msvideo'];
 
-/**
- * MediaUploader – Reusable drag-and-drop media upload component.
- *
- * Props:
- *  - mode: 'image' | 'video' | 'both'  (default: 'both')
- *  - multiple: boolean – allow multiple images (video always single)
- *  - folder: Cloudinary folder path
- *  - onUploadSuccess: (result) => void  — called with Cloudinary/local result
- *  - onDelete: (publicId) => void       — called when user removes an uploaded file
- *  - initialMedia: { url, publicId, type } — pre-fill with existing media
- *  - label: string
- *  - compact: boolean — smaller footprint version
- */
+
 const MediaUploader = ({
   mode = 'both',
   multiple = false,

@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import Trip from '../models/Trip.js';
+import Page from '../models/Page.js';
 
 const INITIAL_TRIPS_CATALOG = [
   {
@@ -253,7 +254,39 @@ export const getTripByIdOrSlug = async (req, res) => {
   }
 };
 
-// @desc    Create a new trip package
+const isDbConnected = () => mongoose.connection && mongoose.connection.readyState === 1;
+
+// Helper to compute SEO health score (0 - 100)
+const computeSeoScore = (seo = {}, trip = {}) => {
+  let score = 0;
+  const title = seo.seoTitle || seo.metaTitle || trip.title || '';
+  const desc = seo.metaDescription || trip.overview || '';
+  const kw = seo.focusKeyword || seo.keywords || '';
+
+  // Title length: optimal 45-65 chars
+  if (title.length >= 40 && title.length <= 65) score += 25;
+  else if (title.length > 0) score += 12;
+
+  // Meta description: optimal 110-160 chars
+  if (desc.length >= 100 && desc.length <= 165) score += 25;
+  else if (desc.length > 0) score += 12;
+
+  // Focus keyword present in title or description
+  if (kw && kw.length >= 3) {
+    score += 10;
+    const cleanKw = kw.toLowerCase().split(',')[0].trim();
+    if (cleanKw && title.toLowerCase().includes(cleanKw)) score += 10;
+    if (cleanKw && desc.toLowerCase().includes(cleanKw)) score += 10;
+  }
+
+  // Canonical URL & OG Image
+  if (seo.canonicalUrl && seo.canonicalUrl.startsWith('http')) score += 10;
+  if (seo.ogImage || trip.image) score += 10;
+
+  return Math.min(100, Math.max(0, score));
+};
+
+// @desc    Create a new trip package with full SEO and page publishing support
 // @route   POST /api/trips
 // @access  Private/Admin
 export const createTrip = async (req, res) => {
@@ -265,57 +298,292 @@ export const createTrip = async (req, res) => {
     }
 
     const cleanSlug = (slug || title).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
+    const cleanPageSlug = (req.body.pageSlug || cleanSlug).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
 
-    const newTrip = await Trip.create({
-      title: title.trim(),
-      slug: cleanSlug,
-      location: location.trim(),
-      destination: destination || 'India',
-      duration: duration.trim(),
-      price: Number(price),
-      originalPrice: req.body.originalPrice ? Number(req.body.originalPrice) : Math.round(Number(price) * 1.2),
-      image: image.trim(),
-      rating: req.body.rating || 4.8,
-      reviews: req.body.reviews || 12,
-      tags: req.body.tags || ['Backpacking', 'Adventure'],
-      nextBatch: req.body.nextBatch || '15 Sep',
-      overview: req.body.overview || '',
-      itinerary: req.body.itinerary || [],
-      inclusions: req.body.inclusions || [],
-      exclusions: req.body.exclusions || [],
-      faqs: req.body.faqs || [],
-      seo: req.body.seo || {
-        seoTitle: `${title} | WanderLuxe Travel`,
-        metaDescription: req.body.overview || `Book ${title} with WanderLuxe.`,
-        canonicalUrl: `https://wanderluxe.in/trip/${cleanSlug}`,
-        indexingDirective: 'index, follow'
+    const seoPayload = {
+      seoTitle: req.body.seo?.seoTitle || req.body.seo?.metaTitle || `${title} | WanderLuxe Expeditions`,
+      metaTitle: req.body.seo?.metaTitle || req.body.seo?.seoTitle || `${title} | WanderLuxe Expeditions`,
+      metaDescription: req.body.seo?.metaDescription || req.body.overview || `Book ${title} in ${location}. Includes verified accommodations, certified captain guidance, and transfers.`,
+      focusKeyword: req.body.seo?.focusKeyword || req.body.tags?.[0] || 'Backpacking',
+      keywords: req.body.seo?.keywords || (Array.isArray(req.body.tags) ? req.body.tags.join(', ') : 'group travel, adventure tours'),
+      canonicalUrl: req.body.seo?.canonicalUrl || `https://wanderluxe.in/trip/${cleanSlug}`,
+      indexingDirective: req.body.seo?.indexingDirective || 'index, follow',
+      robots: req.body.seo?.robots || 'index, follow',
+      ogTitle: req.body.seo?.ogTitle || title,
+      ogDescription: req.body.seo?.ogDescription || req.body.seo?.metaDescription || req.body.overview || `Join ${title} by WanderLuxe`,
+      ogImage: req.body.seo?.ogImage || image,
+      ogType: req.body.seo?.ogType || 'website',
+      twitterCard: req.body.seo?.twitterCard || 'summary_large_image',
+      twitterTitle: req.body.seo?.twitterTitle || req.body.seo?.ogTitle || title,
+      twitterDescription: req.body.seo?.twitterDescription || req.body.seo?.ogDescription || req.body.overview || '',
+      twitterImage: req.body.seo?.twitterImage || req.body.seo?.ogImage || image,
+      structuredDataType: req.body.seo?.structuredDataType || 'TouristTrip',
+      structuredSchemaType: req.body.seo?.structuredSchemaType || 'TouristTrip',
+      structuredDataJson: req.body.seo?.structuredDataJson || ''
+    };
+
+    seoPayload.seoHealthScore = computeSeoScore(seoPayload, req.body);
+
+    let newTrip = null;
+    let createdPage = null;
+
+    if (isDbConnected()) {
+      newTrip = await Trip.create({
+        title: title.trim(),
+        slug: cleanSlug,
+        location: location.trim(),
+        destination: destination || 'India',
+        duration: duration.trim(),
+        price: Number(price),
+        originalPrice: req.body.originalPrice ? Number(req.body.originalPrice) : Math.round(Number(price) * 1.2),
+        image: image.trim(),
+        rating: req.body.rating || 4.8,
+        reviews: req.body.reviews || 12,
+        tags: req.body.tags || ['Backpacking', 'Adventure'],
+        nextBatch: req.body.nextBatch || '15 Sep',
+        overview: req.body.overview || '',
+        itinerary: req.body.itinerary || [],
+        inclusions: req.body.inclusions || [],
+        exclusions: req.body.exclusions || [],
+        faqs: req.body.faqs || [],
+        publishAsPage: Boolean(req.body.publishAsPage),
+        pageSlug: cleanPageSlug,
+        pageSubtitle: req.body.pageSubtitle || req.body.overview || '',
+        pageContent: req.body.pageContent || req.body.overview || '',
+        customSections: req.body.customSections || [],
+        seo: seoPayload
+      });
+
+      // If Admin selected "Publish as Dedicated SEO Landing Page", create/sync Page document
+      if (req.body.publishAsPage) {
+        try {
+          createdPage = await Page.findOneAndUpdate(
+            { slug: cleanPageSlug },
+            {
+              title: title.trim(),
+              slug: cleanPageSlug,
+              heroSubtitle: req.body.pageSubtitle || req.body.overview || `${duration} Curated Group Expedition in ${location}`,
+              category: 'Destinations',
+              content: req.body.pageContent || req.body.overview || '',
+              sections: req.body.customSections || [],
+              status: 'published',
+              author: 'WanderLuxe Editorial & Trip Captains',
+              tripId: newTrip._id,
+              seo: {
+                metaTitle: seoPayload.metaTitle,
+                metaDescription: seoPayload.metaDescription,
+                focusKeyword: seoPayload.focusKeyword,
+                keywords: seoPayload.keywords,
+                canonicalUrl: seoPayload.canonicalUrl || `https://wanderluxe.in/page/${cleanPageSlug}`,
+                robots: seoPayload.robots,
+                ogTitle: seoPayload.ogTitle,
+                ogDescription: seoPayload.ogDescription,
+                ogImage: seoPayload.ogImage,
+                ogType: seoPayload.ogType,
+                twitterCard: seoPayload.twitterCard,
+                twitterTitle: seoPayload.twitterTitle,
+                twitterDescription: seoPayload.twitterDescription,
+                twitterImage: seoPayload.twitterImage,
+                structuredDataType: seoPayload.structuredDataType || 'TouristTrip',
+                structuredDataJson: seoPayload.structuredDataJson
+              }
+            },
+            { upsert: true, new: true }
+          );
+        } catch (pageErr) {
+          console.warn('Sync page creation warning:', pageErr.message);
+        }
       }
-    });
+    } else {
+      // Fallback in-memory object
+      newTrip = {
+        _id: 'trip_' + Date.now(),
+        id: Date.now(),
+        title: title.trim(),
+        slug: cleanSlug,
+        location: location.trim(),
+        destination: destination || 'India',
+        duration: duration.trim(),
+        price: Number(price),
+        originalPrice: req.body.originalPrice ? Number(req.body.originalPrice) : Math.round(Number(price) * 1.2),
+        image: image.trim(),
+        rating: req.body.rating || 4.8,
+        reviews: req.body.reviews || 12,
+        tags: req.body.tags || ['Backpacking', 'Adventure'],
+        nextBatch: req.body.nextBatch || '15 Sep',
+        overview: req.body.overview || '',
+        publishAsPage: Boolean(req.body.publishAsPage),
+        pageSlug: cleanPageSlug,
+        seo: seoPayload
+      };
+    }
 
-    res.status(201).json({ success: true, data: newTrip });
+    res.status(201).json({
+      success: true,
+      message: req.body.publishAsPage ? 'Trip created and published as SEO Landing Page successfully!' : 'Trip created successfully!',
+      data: newTrip,
+      page: createdPage
+    });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message || 'Server Error creating trip' });
   }
 };
 
-// @desc    Update trip package
+// @desc    Update trip package and SEO configuration anytime
 // @route   PUT /api/trips/:id
 // @access  Private/Admin
 export const updateTrip = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const trip = await Trip.findById(id);
-    if (!trip) {
-      return res.status(404).json({ message: 'Trip package not found' });
+    let trip = null;
+    if (isDbConnected()) {
+      if (mongoose.Types.ObjectId.isValid(id)) {
+        trip = await Trip.findById(id);
+      }
+      if (!trip) {
+        trip = await Trip.findOne({ slug: id });
+      }
     }
 
-    Object.assign(trip, req.body);
-    await trip.save();
+    if (!trip && isDbConnected()) {
+      return res.status(404).json({ success: false, message: 'Trip package not found' });
+    }
 
-    res.json({ success: true, data: trip });
+    // Merge SEO data if provided
+    let updatedSeo = { ...(trip?.seo?.toObject?.() || trip?.seo || {}), ...(req.body.seo || {}) };
+    if (req.body.seoTitle) updatedSeo.seoTitle = req.body.seoTitle;
+    if (req.body.metaTitle) updatedSeo.metaTitle = req.body.metaTitle;
+    if (req.body.metaDescription) updatedSeo.metaDescription = req.body.metaDescription;
+    if (req.body.focusKeyword) updatedSeo.focusKeyword = req.body.focusKeyword;
+    if (req.body.canonicalUrl) updatedSeo.canonicalUrl = req.body.canonicalUrl;
+    if (req.body.indexingDirective) updatedSeo.indexingDirective = req.body.indexingDirective;
+    if (req.body.robots) updatedSeo.robots = req.body.robots;
+    if (req.body.ogTitle) updatedSeo.ogTitle = req.body.ogTitle;
+    if (req.body.ogDescription) updatedSeo.ogDescription = req.body.ogDescription;
+    if (req.body.ogImage) updatedSeo.ogImage = req.body.ogImage;
+
+    updatedSeo.seoHealthScore = computeSeoScore(updatedSeo, { ...trip?.toObject?.(), ...req.body });
+
+    const updateData = {
+      ...req.body,
+      seo: updatedSeo
+    };
+
+    if (trip && typeof trip.save === 'function') {
+      Object.assign(trip, updateData);
+      await trip.save();
+
+      // Sync linked Dynamic Page if publishAsPage is active
+      if (trip.publishAsPage) {
+        try {
+          const targetSlug = trip.pageSlug || trip.slug;
+          await Page.findOneAndUpdate(
+            { $or: [{ tripId: trip._id }, { slug: targetSlug }] },
+            {
+              title: trip.title,
+              slug: targetSlug,
+              heroSubtitle: trip.pageSubtitle || trip.overview,
+              category: 'Destinations',
+              content: trip.pageContent || trip.overview,
+              sections: trip.customSections || [],
+              status: 'published',
+              tripId: trip._id,
+              seo: {
+                metaTitle: updatedSeo.metaTitle || updatedSeo.seoTitle || trip.title,
+                metaDescription: updatedSeo.metaDescription,
+                focusKeyword: updatedSeo.focusKeyword,
+                keywords: updatedSeo.keywords,
+                canonicalUrl: updatedSeo.canonicalUrl,
+                robots: updatedSeo.robots || updatedSeo.indexingDirective,
+                ogTitle: updatedSeo.ogTitle,
+                ogDescription: updatedSeo.ogDescription,
+                ogImage: updatedSeo.ogImage,
+                ogType: updatedSeo.ogType || 'website',
+                twitterCard: updatedSeo.twitterCard || 'summary_large_image',
+                twitterTitle: updatedSeo.twitterTitle,
+                twitterDescription: updatedSeo.twitterDescription,
+                twitterImage: updatedSeo.twitterImage,
+                structuredDataType: updatedSeo.structuredDataType || 'TouristTrip',
+                structuredDataJson: updatedSeo.structuredDataJson
+              }
+            },
+            { upsert: true, new: true }
+          );
+        } catch (syncErr) {
+          console.warn('Page sync warning:', syncErr.message);
+        }
+      }
+    }
+
+    res.json({
+      success: true,
+      message: 'Trip package and SEO configuration updated successfully.',
+      data: trip || updateData
+    });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message || 'Server Error updating trip' });
+  }
+};
+
+// @desc    Update Trip SEO configuration directly
+// @route   PUT /api/trips/:id/seo
+// @access  Private/Admin
+export const updateTripSeo = async (req, res) => {
+  try {
+    const { id } = req.params;
+    let trip = null;
+
+    if (isDbConnected()) {
+      if (mongoose.Types.ObjectId.isValid(id)) {
+        trip = await Trip.findById(id);
+      }
+      if (!trip) {
+        trip = await Trip.findOne({ slug: id });
+      }
+    }
+
+    if (!trip && isDbConnected()) {
+      return res.status(404).json({ success: false, message: 'Trip not found' });
+    }
+
+    const currentSeo = trip?.seo?.toObject?.() || trip?.seo || {};
+    const newSeo = {
+      ...currentSeo,
+      ...req.body,
+      seoHealthScore: computeSeoScore(req.body, trip || {})
+    };
+
+    if (trip && typeof trip.save === 'function') {
+      trip.seo = newSeo;
+      if (req.body.publishAsPage !== undefined) {
+        trip.publishAsPage = req.body.publishAsPage;
+      }
+      await trip.save();
+
+      // Sync linked page if applicable
+      if (trip.publishAsPage) {
+        const targetSlug = trip.pageSlug || trip.slug;
+        await Page.findOneAndUpdate(
+          { $or: [{ tripId: trip._id }, { slug: targetSlug }] },
+          {
+            title: trip.title,
+            slug: targetSlug,
+            tripId: trip._id,
+            seo: newSeo
+          },
+          { upsert: true }
+        );
+      }
+    }
+
+    res.json({
+      success: true,
+      message: 'Trip SEO saved and deployed successfully.',
+      seo: newSeo
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message || 'Server Error updating trip SEO' });
   }
 };
 
@@ -326,13 +594,22 @@ export const deleteTrip = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const trip = await Trip.findById(id);
-    if (!trip) {
-      return res.status(404).json({ message: 'Trip package not found' });
+    let trip = null;
+    if (isDbConnected()) {
+      if (mongoose.Types.ObjectId.isValid(id)) {
+        trip = await Trip.findById(id);
+      }
+      if (!trip) {
+        trip = await Trip.findOne({ slug: id });
+      }
+      if (trip) {
+        // Also remove any linked dynamic page
+        await Page.deleteMany({ $or: [{ tripId: trip._id }, { slug: trip.slug }] });
+        await trip.deleteOne();
+      }
     }
 
-    await trip.deleteOne();
-    res.json({ success: true, message: 'Trip deleted successfully', id });
+    res.json({ success: true, message: 'Trip package deleted successfully', id });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message || 'Server Error deleting trip' });
   }

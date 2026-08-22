@@ -73,13 +73,55 @@ const tripSchema = new mongoose.Schema(
       type: Array,
       default: []
     },
-    // Trip-Level SEO Configuration Schema
+    // Dedicated Landing Page & Content Options
+    publishAsPage: {
+      type: Boolean,
+      default: false
+    },
+    pageSlug: {
+      type: String,
+      lowercase: true,
+      trim: true,
+      default: ''
+    },
+    pageSubtitle: {
+      type: String,
+      default: ''
+    },
+    pageContent: {
+      type: String,
+      default: ''
+    },
+    customSections: [
+      {
+        heading: { type: String, default: '' },
+        subheading: { type: String, default: '' },
+        body: { type: String, default: '' },
+        imageUrl: { type: String, default: '' },
+        imageAlt: { type: String, default: '' },
+        ctaLabel: { type: String, default: '' },
+        ctaUrl: { type: String, default: '' }
+      }
+    ],
+    // Trip-Level Comprehensive SEO Configuration Schema
     seo: {
       seoTitle: {
         type: String,
         default: ''
       },
+      metaTitle: {
+        type: String,
+        default: ''
+      },
       metaDescription: {
+        type: String,
+        default: ''
+      },
+      focusKeyword: {
+        type: String,
+        default: ''
+      },
+      keywords: {
         type: String,
         default: ''
       },
@@ -89,7 +131,10 @@ const tripSchema = new mongoose.Schema(
       },
       indexingDirective: {
         type: String,
-        enum: ['index, follow', 'noindex, nofollow'],
+        default: 'index, follow'
+      },
+      robots: {
+        type: String,
         default: 'index, follow'
       },
       ogTitle: {
@@ -104,9 +149,41 @@ const tripSchema = new mongoose.Schema(
         type: String,
         default: ''
       },
+      ogType: {
+        type: String,
+        default: 'website'
+      },
+      twitterCard: {
+        type: String,
+        default: 'summary_large_image'
+      },
+      twitterTitle: {
+        type: String,
+        default: ''
+      },
+      twitterDescription: {
+        type: String,
+        default: ''
+      },
+      twitterImage: {
+        type: String,
+        default: ''
+      },
+      structuredDataType: {
+        type: String,
+        default: 'TouristTrip'
+      },
       structuredSchemaType: {
         type: String,
-        default: 'Product'
+        default: 'TouristTrip'
+      },
+      structuredDataJson: {
+        type: String,
+        default: ''
+      },
+      seoHealthScore: {
+        type: Number,
+        default: 85
       }
     }
   },

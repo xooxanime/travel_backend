@@ -436,6 +436,44 @@ export const getTripByIdApi = async (idOrSlug) => {
   return response.json();
 };
 
+export const createTripApi = async (tripData) => {
+  const response = await fetch(`${API_BASE_URL}/trips`, {
+    method: 'POST',
+    headers: getHeaders(),
+    body: JSON.stringify(tripData)
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.message || 'Failed to create trip');
+  }
+  return data;
+};
+
+export const updateTripApi = async (id, tripData) => {
+  const response = await fetch(`${API_BASE_URL}/trips/${id}`, {
+    method: 'PUT',
+    headers: getHeaders(),
+    body: JSON.stringify(tripData)
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.message || 'Failed to update trip');
+  }
+  return data;
+};
+
+export const deleteTripApi = async (id) => {
+  const response = await fetch(`${API_BASE_URL}/trips/${id}`, {
+    method: 'DELETE',
+    headers: getHeaders()
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.message || 'Failed to delete trip');
+  }
+  return data;
+};
+
 export const submitLeadApi = async (leadData) => {
   const response = await fetch(`${API_BASE_URL}/leads`, {
     method: 'POST',

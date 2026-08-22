@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -10,20 +10,39 @@ import {
 import SEOHead from '../components/SEOHead';
 import Breadcrumbs from '../components/Breadcrumbs';
 import WeatherBadge from '../components/WeatherBadge';
-import { getProductTripSchema, getFAQSchema } from '../utils/seoSchemas';
+import { getProductTripSchema, getTouristTripSchema, getFAQSchema } from '../utils/seoSchemas';
 import { UPCOMING_TRIPS } from '../constants/mockData';
 import { getDestinationWeather, getCurrentSeason } from '../utils/weatherSeasonEngine';
+import { getTripByIdApi } from '../services/api';
 
 const TripDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
 
-  // Find trip by ID or fallback to trip 1
-  const trip = UPCOMING_TRIPS.find((t) => t.id === parseInt(id)) || UPCOMING_TRIPS[0];
+  // Find trip fallback
+  const fallbackTrip = UPCOMING_TRIPS.find((t) => String(t.id) === String(id) || t.slug === id) || UPCOMING_TRIPS[0];
+  const [trip, setTrip] = useState(fallbackTrip);
+
+  useEffect(() => {
+    const fetchTrip = async () => {
+      try {
+        const res = await getTripByIdApi(id);
+        if (res && res.data) {
+          setTrip(res.data);
+        } else if (res && res._id) {
+          setTrip(res);
+        }
+      } catch (err) {
+        // use fallbackTrip
+      }
+    };
+    if (id) fetchTrip();
+  }, [id]);
+
   const weather = trip.weather || getDestinationWeather(trip.location);
   const season = getCurrentSeason();
 
-  const [selectedBatch, setSelectedBatch] = useState(trip.availableBatches[0] || { dates: '15 Sep - 20 Sep, 2026', seatsLeft: 6, status: 'Available' });
+  const [selectedBatch, setSelectedBatch] = useState(trip.availableBatches?.[0] || { dates: '15 Sep - 20 Sep, 2026', seatsLeft: 6, status: 'Available' });
   const [occupancy, setOccupancy] = useState('Double Sharing');
   const [travelers, setTravelers] = useState(1);
   const [activeTab, setActiveTab] = useState('overview');
@@ -42,7 +61,7 @@ const TripDetails = () => {
   const totalPrice = perPersonPrice * travelers;
   const monthlyEmi = Math.round(totalPrice / 6);
 
-  const tripFaqs = [
+  const tripFaqs = trip.faqs && trip.faqs.length > 0 ? trip.faqs : [
     {
       q: `What is included in the ${trip.title} package price?`,
       a: 'Package includes boutique stay accommodations, private transfers, daily breakfast, certified trip captain guidance, entry passes, and emergency support.'
@@ -58,18 +77,19 @@ const TripDetails = () => {
   ];
 
   const productSchema = getProductTripSchema(trip);
+  const touristTripSchema = getTouristTripSchema(trip);
   const faqSchema = getFAQSchema(tripFaqs);
-  const combinedSchemas = [productSchema, faqSchema].filter(Boolean);
+  const combinedSchemas = [productSchema, touristTripSchema, faqSchema].filter(Boolean);
 
   const handleProceedToBook = () => {
     navigate('/checkout', {
       state: {
-        tripId: trip.id,
+        tripId: trip._id || trip.id,
         tripTitle: trip.title,
         tripImage: trip.image,
         location: trip.location,
         duration: trip.duration,
-        batchDate: selectedBatch.dates,
+        batchDate: selectedBatch.dates || '15 Sep - 20 Sep, 2026',
         occupancy: occupancy,
         travelersCount: travelers,
         perPersonPrice: perPersonPrice,
@@ -80,18 +100,27 @@ const TripDetails = () => {
   };
 
   const openWhatsAppEnquiry = () => {
-    const message = encodeURIComponent(`Hi WanderLuxe Captain! I'm interested in booking ${trip.title} (${selectedBatch.dates}). Can you please share details?`);
+    const message = encodeURIComponent(`Hi WanderLuxe Captain! I'm interested in booking ${trip.title} (${selectedBatch.dates || 'Upcoming Batch'}). Can you please share details?`);
     window.open(`https://wa.me/918542036499?text=${message}`, '_blank');
   };
 
   return (
     <div className="min-h-screen bg-brand-light pt-20 pb-28">
       <SEOHead
-        title={trip.seo?.seoTitle || `${trip.title} | Itinerary, Dates & Price`}
-        description={trip.seo?.metaDescription || `Book ${trip.title} (${trip.duration}). Prices from ₹${trip.price.toLocaleString()}. Includes boutique stays, transfers, certified captain, and 0% EMI.`}
-        canonical={trip.seo?.canonicalUrl || `/trip/${trip.id}`}
+        title={trip.seo?.metaTitle || trip.seo?.seoTitle || `${trip.title} | Itinerary, Dates & Price`}
+        description={trip.seo?.metaDescription || `Book ${trip.title} (${trip.duration}). Prices from ₹${(trip.price || 18500).toLocaleString()}. Includes boutique stays, transfers, certified captain, and 0% EMI.`}
+        canonical={trip.seo?.canonicalUrl || `/trip/${trip.slug || trip.id}`}
+        keywords={trip.seo?.keywords || trip.tags}
+        robots={trip.seo?.robots || trip.seo?.indexingDirective || 'index, follow'}
+        ogTitle={trip.seo?.ogTitle || trip.title}
+        ogDescription={trip.seo?.ogDescription || trip.seo?.metaDescription || trip.overview}
         ogImage={trip.seo?.ogImage || trip.image}
-        jsonLd={combinedSchemas}
+        ogType={trip.seo?.ogType || 'website'}
+        twitterCard={trip.seo?.twitterCard || 'summary_large_image'}
+        twitterTitle={trip.seo?.twitterTitle || trip.seo?.ogTitle || trip.title}
+        twitterDescription={trip.seo?.twitterDescription || trip.seo?.ogDescription}
+        twitterImage={trip.seo?.twitterImage || trip.seo?.ogImage || trip.image}
+        jsonLd={trip.seo?.structuredDataJson ? trip.seo.structuredDataJson : combinedSchemas}
       />
 
       {/* Lightbox Modal */}

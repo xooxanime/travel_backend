@@ -49,9 +49,15 @@ const pageSchema = new mongoose.Schema(
       type: String,
       default: 'WanderLuxe Editorial Team'
     },
+    tripId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Trip',
+      default: null
+    },
     seo: {
       metaTitle: { type: String, default: '' },
       metaDescription: { type: String, default: '' },
+      focusKeyword: { type: String, default: '' },
       keywords: { type: String, default: '' },
       canonicalUrl: { type: String, default: '' },
       robots: { type: String, default: 'index, follow' },
@@ -65,8 +71,7 @@ const pageSchema = new mongoose.Schema(
       twitterImage: { type: String, default: '' },
       structuredDataType: {
         type: String,
-        enum: ['WebPage', 'Article', 'TouristAttraction', 'FAQPage', 'Event'],
-        default: 'WebPage'
+        default: 'TouristTrip'
       },
       structuredDataJson: { type: String, default: '' }
     }

@@ -3,7 +3,6 @@ import mongoose from "mongoose";
 
 let isConnecting = false;
 
-// Disable Mongoose global bufferCommands so queries fail-fast if DB is unreachable
 mongoose.set("bufferCommands", false);
 
 const connectDB = async () => {
